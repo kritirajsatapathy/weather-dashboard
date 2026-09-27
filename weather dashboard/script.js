@@ -1,86 +1,273 @@
-const apiKey = "27bead20e3113eca1b90daa96fd87635"; // Replace with your OpenWeatherMap API key
+const apiKey = "00d2e852661c20c7437520ed45363a2d";
 
-const searchBtn = document.getElementById("searchBtn");
+
+// Get HTML elements
+
 const cityInput = document.getElementById("cityInput");
+const searchBtn = document.getElementById("searchBtn");
 
-const cityNameEl = document.getElementById("cityName");
-const dateEl = document.getElementById("date");
-const tempEl = document.getElementById("temp");
-const descriptionEl = document.getElementById("description");
-const humidityEl = document.getElementById("humidity");
-const windEl = document.getElementById("wind");
-const weatherIconEl = document.getElementById("weatherIcon");
-const weatherInfoEl = document.getElementById("weatherInfo");
-const forecastContainer = document.getElementById("forecastContainer");
-const forecastTitle = document.getElementById("forecastTitle");
+const weatherContainer = document.getElementById("weatherContainer");
 
-searchBtn.addEventListener("click", () => {
-  const city = cityInput.value.trim();
-  if (city) getWeatherData(city);
-});
+const city = document.getElementById("city");
+const date = document.getElementById("date");
 
-async function getWeatherData(city) {
-  try {
-    // 🌦️ Fetch current weather for Indian city
-    const currentUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city},IN&appid=${apiKey}&units=metric`;
-    const currentRes = await fetch(currentUrl);
-    const currentData = await currentRes.json();
+const temperature = document.getElementById("temperature");
+const description = document.getElementById("description");
 
-    if (currentData.cod !== 200) {
-      alert("City not found in India! Please try another Indian city.");
-      return;
+const humidity = document.getElementById("humidity");
+const windSpeed = document.getElementById("windSpeed");
+
+const forecast = document.getElementById("forecast");
+
+
+// Search button
+
+searchBtn.addEventListener("click", getWeather);
+
+
+// Press Enter to search
+
+cityInput.addEventListener("keypress", function(event) {
+
+    if (event.key === "Enter") {
+        getWeather();
     }
 
-    displayCurrentWeather(currentData);
+});
 
-    // 🌦️ Fetch 5-day forecast for Indian city
-    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city},IN&appid=${apiKey}&units=metric`;
-    const forecastRes = await fetch(forecastUrl);
-    const forecastData = await forecastRes.json();
 
-    displayForecast(forecastData.list);
+// Main weather function
 
-  } catch (error) {
-    console.error("Error fetching weather data:", error);
-    alert("Something went wrong while fetching data.");
-  }
+async function getWeather() {
+
+    const cityName = cityInput.value.trim();
+
+    if (cityName === "") {
+        alert("Please enter a city name.");
+        return;
+    }
+
+    try {
+
+        const weatherURL =
+            `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cityName)},IN&units=metric&appid=${apiKey}`;
+
+        const weatherResponse = await fetch(weatherURL);
+
+        const weatherData = await weatherResponse.json();
+
+
+        // Show the REAL API error
+        if (!weatherResponse.ok) {
+
+            console.error("OpenWeather Error:", weatherData);
+
+            throw new Error(
+                `Error ${weatherResponse.status}: ${weatherData.message}`
+            );
+        }
+
+
+        // Display current weather
+
+        city.textContent =
+            `${weatherData.name}, India 🇮🇳`;
+
+        temperature.textContent =
+            `${Math.round(weatherData.main.temp)}°C`;
+
+        description.textContent =
+            weatherData.weather[0].description;
+
+        humidity.textContent =
+            `${weatherData.main.humidity}%`;
+
+        windSpeed.textContent =
+            `${weatherData.wind.speed} m/s`;
+
+
+        // Date
+
+        const currentDate = new Date();
+
+        date.textContent =
+            currentDate.toLocaleString("en-IN", {
+                weekday: "short",
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+            });
+
+
+        // Weather icon
+
+        const iconElement =
+            document.querySelector(".weather-icon");
+
+        iconElement.textContent =
+            getWeatherIcon(weatherData.weather[0].main);
+
+
+        // Show weather section
+
+        weatherContainer.classList.remove("hidden");
+
+
+        // Forecast
+
+        await getForecast(cityName);
+
+    }
+
+    catch (error) {
+
+        console.error("REAL ERROR:", error);
+
+        alert(error.message);
+
+        weatherContainer.classList.add("hidden");
+    }
 }
 
-function displayCurrentWeather(data) {
-  const { name } = data;
-  const { icon, description } = data.weather[0];
-  const { temp, humidity } = data.main;
-  const { speed } = data.wind;
 
-  cityNameEl.textContent = `${name}, India 🇮🇳`;
-  dateEl.textContent = new Date().toLocaleString("en-IN");
-  tempEl.textContent = `${Math.round(temp)}°C`;
-  descriptionEl.textContent = description;
-  humidityEl.textContent = humidity;
-  windEl.textContent = speed;
-  weatherIconEl.src = `https://openweathermap.org/img/wn/${icon}@2x.png`;
+// Forecast function
 
-  weatherInfoEl.classList.remove("hidden");
+async function getForecast(cityName) {
+
+    const forecastURL =
+        `https://api.openweathermap.org/data/2.5/forecast?q=${cityName},IN&units=metric&appid=${apiKey}`;
+
+
+    const response = await fetch(forecastURL);
+
+
+    if (!response.ok) {
+
+        throw new Error("Forecast unavailable");
+
+    }
+
+
+    const data = await response.json();
+
+
+    forecast.innerHTML = "";
+
+
+    /*
+        OpenWeather gives data every 3 hours.
+
+        We select approximately one forecast
+        for each day.
+    */
+
+
+    const dailyData = {};
+
+
+    data.list.forEach(item => {
+
+        const day = new Date(item.dt * 1000);
+
+        const dayName =
+            day.toLocaleDateString("en-IN", {
+                weekday: "short"
+            });
+
+
+        if (!dailyData[dayName]) {
+
+            dailyData[dayName] = item;
+
+        }
+
+    });
+
+
+    const days =
+        Object.keys(dailyData).slice(0, 5);
+
+
+    days.forEach(dayName => {
+
+        const item = dailyData[dayName];
+
+
+        const card =
+            document.createElement("div");
+
+        card.className =
+            "forecast-card";
+
+
+        const icon =
+            getWeatherIcon(
+                item.weather[0].main
+            );
+
+
+        const temp =
+            Math.round(item.main.temp);
+
+
+        card.innerHTML = `
+
+            <div class="forecast-day">
+                ${dayName}
+            </div>
+
+            <div class="forecast-icon">
+                ${icon}
+            </div>
+
+            <div class="forecast-temp">
+                ${temp}°C
+            </div>
+
+        `;
+
+
+        forecast.appendChild(card);
+
+    });
+
 }
 
-function displayForecast(list) {
-  forecastContainer.innerHTML = "";
-  forecastTitle.classList.remove("hidden");
 
-  // Pick one reading per day (~every 8th item)
-  for (let i = 0; i < list.length; i += 8) {
-    const item = list[i];
-    const date = new Date(item.dt_txt);
-    const temp = Math.round(item.main.temp);
-    const icon = item.weather[0].icon;
 
-    const card = document.createElement("div");
-    card.classList.add("forecast-card");
-    card.innerHTML = `
-      <p>${date.toLocaleDateString("en-IN", { weekday: "short" })}</p>
-      <img src="https://openweathermap.org/img/wn/${icon}.png" alt="">
-      <p>${temp}°C</p>
-    `;
-    forecastContainer.appendChild(card);
-  }
+// Weather icon function
+
+function getWeatherIcon(weather) {
+
+    switch (weather) {
+
+        case "Clear":
+            return "☀️";
+
+        case "Clouds":
+            return "☁️";
+
+        case "Rain":
+            return "🌧️";
+
+        case "Drizzle":
+            return "🌦️";
+
+        case "Thunderstorm":
+            return "⛈️";
+
+        case "Snow":
+            return "❄️";
+
+        case "Mist":
+        case "Fog":
+        case "Haze":
+            return "🌫️";
+
+        default:
+            return "🌤️";
+    }
+
 }
